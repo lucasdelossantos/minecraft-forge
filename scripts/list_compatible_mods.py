@@ -35,6 +35,35 @@ def parse_minecraft_version(forge_version: str) -> str:
         return match.group(1)
     return None
 
+def get_curseforge_mod_name(api_key: str, mod_id: str) -> str:
+    """Fetch mod name from CurseForge API using mod ID."""
+    headers = {
+        'x-api-key': api_key,
+        'Content-Type': 'application/json'
+    }
+    
+    url = f"https://api.curseforge.com/v1/mods/{mod_id}"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data['data']['slug']
+    except Exception as e:
+        print(f"Error fetching CurseForge mod name for ID {mod_id}: {e}")
+        return mod_id
+
+def get_modrinth_mod_name(mod_id: str) -> str:
+    """Fetch mod name from Modrinth API using project ID."""
+    url = f"https://api.modrinth.com/v2/project/{mod_id}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return data['slug']
+    except Exception as e:
+        print(f"Error fetching Modrinth mod name for ID {mod_id}: {e}")
+        return mod_id
+
 def get_curseforge_mods(minecraft_version: str, api_key: str) -> List[ModInfo]:
     """Fetch mods from CurseForge API."""
     headers = {
@@ -61,12 +90,13 @@ def get_curseforge_mods(minecraft_version: str, api_key: str) -> List[ModInfo]:
             # Find the latest file compatible with the Minecraft version
             for file in mod['latestFiles']:
                 if minecraft_version in file['gameVersions']:
-                    # Get dependencies
+                    # Get dependencies with proper names
                     dependencies = []
                     for dep in file.get('dependencies', []):
                         if dep['modId']:  # Only include actual mod dependencies
+                            dep_name = get_curseforge_mod_name(api_key, str(dep['modId']))
                             dependencies.append({
-                                'name': dep.get('addonId', 'unknown'),
+                                'name': dep_name,
                                 'version': dep.get('version', 'any')
                             })
                     
@@ -106,12 +136,13 @@ def get_modrinth_mods(minecraft_version: str) -> List[ModInfo]:
             
             if version_data:
                 latest_version = version_data[0]
-                # Get dependencies
+                # Get dependencies with proper names
                 dependencies = []
                 for dep in latest_version.get('dependencies', []):
                     if dep['project_id']:  # Only include actual mod dependencies
+                        dep_name = get_modrinth_mod_name(dep['project_id'])
                         dependencies.append({
-                            'name': dep['project_id'],
+                            'name': dep_name,
                             'version': dep.get('version_range', 'any')
                         })
                 
