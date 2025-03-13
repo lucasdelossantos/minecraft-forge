@@ -24,6 +24,15 @@ wget $FORGE_URL
 # Install Forge server
 java -jar forge-*-installer.jar --installServer
 
+# Create mods directory
+mkdir -p mods
+
+# Download and install mods
+for mod in "${mods[@]}"; do
+    echo "Installing mod: ${mod[name]}"
+    wget -O "mods/${mod[name]}-${mod[version]}.jar" "${mod[url]}"
+done
+
 # Create start script
 cat << EOF > start.sh
 #!/bin/bash
@@ -39,7 +48,7 @@ cat << 'EOF' > backup.sh
 #!/bin/bash
 cd /opt/minecraft
 systemctl stop minecraft
-tar czf world.tar.gz world
+tar czf world.tar.gz world mods
 aws s3 cp world.tar.gz s3://${backup_bucket}/world.tar.gz
 systemctl start minecraft
 EOF

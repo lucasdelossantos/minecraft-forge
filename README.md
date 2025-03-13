@@ -91,6 +91,64 @@ The deployment will:
 - **Server Port**: 25565
 - **SSH Port**: 22
 - **Access**: Automatically restricted to your IP address
+- **Mod Support**: Available through configuration
+
+### Mod Support
+
+The server supports mod installation through configuration. To add mods:
+
+1. Edit `terraform/variables.tf` and add mods to the `mods` variable:
+   ```hcl
+   mods = [
+     {
+       name        = "jei"
+       url         = "https://github.com/mezz/JustEnoughItems/releases/download/1.20.1-15.2.0.27/jei-1.20.1-15.2.0.27.jar"
+       version     = "15.2.0.27"
+       description = "Just Enough Items - Item and recipe viewer"
+     }
+   ]
+   ```
+
+2. Deploy the server with the new mod configuration:
+   - The mods will be automatically downloaded and installed
+   - Mods are included in the world backup
+   - When restoring from backup, mods will be automatically restored
+
+Note: Make sure to use mods that are compatible with your Forge version. The server will automatically download and install the specified mods during deployment.
+
+#### Finding Compatible Mods
+
+A Python script is provided to help find compatible mods for your Forge version:
+
+1. Install the required Python packages:
+   ```bash
+   cd scripts
+   pip install -r requirements.txt
+   ```
+
+2. Run the script with your Forge version:
+   ```bash
+   # Without CurseForge API key (will only fetch from Modrinth)
+   python list_compatible_mods.py 1.20.1-47.2.0
+
+   # With CurseForge API key (will fetch from both CurseForge and Modrinth)
+   python list_compatible_mods.py 1.20.1-47.2.0 --curseforge-key YOUR_API_KEY
+
+   # Save output to a file
+   python list_compatible_mods.py 1.20.1-47.2.0 --curseforge-key YOUR_API_KEY -o terraform/mods.tf
+   ```
+
+3. The script will:
+   - Fetch compatible mods from CurseForge (if API key provided) and Modrinth
+   - Generate a Terraform configuration with the mods
+   - Output the configuration to stdout or a file if specified
+
+Note: For CurseForge API access:
+1. Create an account at https://console.curseforge.com/
+2. Generate an API key
+3. Pass the API key using the `--curseforge-key` or `-k` argument
+
+The script will help you find popular mods that are compatible with your Forge version, making it easier to build your modpack.
 
 ### Accessing the Server
 

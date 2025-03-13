@@ -20,4 +20,15 @@ variable "server_memory" {
   description = "Amount of memory to allocate to the server"
   type        = string
   default     = "4G"
+}
+
+variable "mods" {
+  description = "List of mods to install on the server"
+  type = list(object({
+    name        = string
+    url         = string
+    version     = string
+    description = string
+  }))
+  default = []
 } 

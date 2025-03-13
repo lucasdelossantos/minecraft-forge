@@ -177,6 +177,7 @@ resource "aws_instance" "minecraft_server" {
     minecraft_memory = var.server_memory
     backup_bucket    = aws_s3_bucket.minecraft_backups.id
     aws_region       = "us-east-1"
+    mods             = var.mods
   })
 
   tags = {
