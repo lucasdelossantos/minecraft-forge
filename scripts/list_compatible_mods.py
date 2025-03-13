@@ -2,22 +2,30 @@
 import requests
 import json
 import argparse
-from typing import List, Dict
+from typing import List, Dict, Set
 import re
 
 class ModInfo:
-    def __init__(self, name: str, url: str, version: str, description: str):
+    def __init__(self, name: str, url: str, version: str, description: str, dependencies: List[Dict] = None):
         self.name = name
         self.url = url
         self.version = version
         self.description = description
+        self.dependencies = dependencies or []
 
     def to_terraform(self) -> str:
+        deps_str = ""
+        if self.dependencies:
+            deps_str = "\n    dependencies = [\n"
+            for dep in self.dependencies:
+                deps_str += f'      {{ name = "{dep["name"]}", version = "{dep["version"]}" }},\n'
+            deps_str += "    ]"
+        
         return f'''  {{
     name        = "{self.name}"
     url         = "{self.url}"
     version     = "{self.version}"
-    description = "{self.description}"
+    description = "{self.description}"{deps_str}
   }}'''
 
 def parse_minecraft_version(forge_version: str) -> str:
@@ -53,11 +61,21 @@ def get_curseforge_mods(minecraft_version: str, api_key: str) -> List[ModInfo]:
             # Find the latest file compatible with the Minecraft version
             for file in mod['latestFiles']:
                 if minecraft_version in file['gameVersions']:
+                    # Get dependencies
+                    dependencies = []
+                    for dep in file.get('dependencies', []):
+                        if dep['modId']:  # Only include actual mod dependencies
+                            dependencies.append({
+                                'name': dep.get('addonId', 'unknown'),
+                                'version': dep.get('version', 'any')
+                            })
+                    
                     mods.append(ModInfo(
                         name=mod['slug'],
                         url=file['downloadUrl'],
                         version=file['displayName'],
-                        description=mod['summary']
+                        description=mod['summary'],
+                        dependencies=dependencies
                     ))
                     break
         
@@ -88,17 +106,46 @@ def get_modrinth_mods(minecraft_version: str) -> List[ModInfo]:
             
             if version_data:
                 latest_version = version_data[0]
+                # Get dependencies
+                dependencies = []
+                for dep in latest_version.get('dependencies', []):
+                    if dep['project_id']:  # Only include actual mod dependencies
+                        dependencies.append({
+                            'name': dep['project_id'],
+                            'version': dep.get('version_range', 'any')
+                        })
+                
                 mods.append(ModInfo(
                     name=hit['slug'],
                     url=latest_version['files'][0]['url'],
                     version=latest_version['version_number'],
-                    description=hit['description']
+                    description=hit['description'],
+                    dependencies=dependencies
                 ))
         
         return mods
     except Exception as e:
         print(f"Error fetching from Modrinth: {e}")
         return []
+
+def resolve_dependencies(mods: List[ModInfo]) -> List[ModInfo]:
+    """Resolve dependencies and ensure all required mods are included."""
+    mod_dict = {mod.name: mod for mod in mods}
+    required_mods = set()
+    
+    # First pass: collect all required dependencies
+    for mod in mods:
+        for dep in mod.dependencies:
+            required_mods.add(dep['name'])
+    
+    # Second pass: fetch missing dependencies
+    missing_deps = required_mods - set(mod_dict.keys())
+    if missing_deps:
+        print(f"Note: Found {len(missing_deps)} missing dependencies:")
+        for dep in missing_deps:
+            print(f"  - {dep}")
+    
+    return list(mod_dict.values())
 
 def main():
     parser = argparse.ArgumentParser(description='List compatible mods for a Forge version')
@@ -126,6 +173,9 @@ def main():
     # Combine and deduplicate mods
     all_mods = {mod.name: mod for mod in curseforge_mods + modrinth_mods}.values()
     
+    # Resolve dependencies
+    resolved_mods = resolve_dependencies(list(all_mods))
+    
     # Generate Terraform configuration
     terraform_config = '''variable "mods" {
   description = "List of mods to install on the server"
@@ -134,11 +184,15 @@ def main():
     url         = string
     version     = string
     description = string
+    dependencies = optional(list(object({
+      name    = string
+      version = string
+    })), [])
   }))
   default = [
 '''
     
-    for mod in all_mods:
+    for mod in resolved_mods:
         terraform_config += mod.to_terraform() + ",\n"
     
     terraform_config += '''  ]
