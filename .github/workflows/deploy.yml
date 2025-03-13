@@ -1,0 +1,55 @@
+name: Deploy Minecraft Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      key_name:
+        description: 'AWS SSH Key Pair Name'
+        required: true
+      backup_bucket_name:
+        description: 'S3 Bucket Name for Backups'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: us-east-1
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.5.0"
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: |
+        terraform plan \
+          -var="key_name=${{ github.event.inputs.key_name }}" \
+          -var="backup_bucket_name=${{ github.event.inputs.backup_bucket_name }}" \
+          -out=tfplan
+
+    - name: Terraform Apply
+      working-directory: ./terraform
+      run: terraform apply -auto-approve tfplan
+
+    - name: Get Server IP
+      working-directory: ./terraform
+      run: |
+        echo "Server IP: $(terraform output -raw public_ip)" 
